@@ -27,32 +27,29 @@ export default async function DashboardPage() {
   let iAmOwed = 0;
 
   const recentExpenses = [];
+  const balances: Record<string, Record<string, number>> = {};
+
+  const addDebt = (debtor: string, creditor: string, amount: number) => {
+    if (debtor === creditor) return;
+    if (!balances[debtor]) balances[debtor] = {};
+    balances[debtor][creditor] = (balances[debtor][creditor] || 0) + amount;
+  };
 
   if (allExpenses) {
     for (const expense of allExpenses) {
-      const isPayer = expense.payer_id === currentUserId;
-      let mySplitAmount = 0;
-      
-      const mySplit = expense.expense_splits.find((s: any) => s.user_id === currentUserId);
-      if (mySplit) {
-        mySplitAmount = parseFloat(mySplit.amount);
-      }
-
-      if (isPayer) {
+      const payer = expense.payer_id;
+      if (payer === currentUserId) {
         totalExpensesPaidByMe += parseFloat(expense.amount);
-        // I am owed the amount minus my own split
-        const othersOweForThis = parseFloat(expense.amount) - mySplitAmount;
-        iAmOwed += othersOweForThis;
-      } else if (mySplit) {
-        // I owe someone else
-        iOwe += mySplitAmount;
+      }
+      
+      let involved = payer === currentUserId;
+      for (const split of expense.expense_splits) {
+        addDebt(split.user_id, payer, parseFloat(split.amount));
+        if (split.user_id === currentUserId) involved = true;
       }
 
-      // Add to recent if user is involved
-      if (isPayer || mySplit) {
-        if (recentExpenses.length < 5) {
-          recentExpenses.push(expense);
-        }
+      if (involved && recentExpenses.length < 5) {
+        recentExpenses.push(expense);
       }
     }
   }
@@ -60,21 +57,36 @@ export default async function DashboardPage() {
   // Adjust balances based on settlements
   if (allSettlements) {
     for (const settlement of allSettlements) {
-      const amount = parseFloat(settlement.amount);
-      if (settlement.payer_id === currentUserId) {
-        // I paid a settlement, so I owe less
-        iOwe -= amount;
-      }
-      if (settlement.receiver_id === currentUserId) {
-        // I received a settlement, so I am owed less
-        iAmOwed -= amount;
-      }
+      addDebt(settlement.payer_id, settlement.receiver_id, -parseFloat(settlement.amount));
     }
   }
 
-  // Ensure balances don't drop below 0 due to float precision
-  iOwe = Math.max(0, iOwe);
-  iAmOwed = Math.max(0, iAmOwed);
+  // Net the balances pairwise
+  const netBalances: Record<string, Record<string, number>> = {};
+  Object.keys(balances).forEach(debtor => {
+    Object.keys(balances[debtor]).forEach(creditor => {
+      const debt = balances[debtor][creditor];
+      const credit = balances[creditor]?.[debtor] || 0;
+      const net = debt - credit;
+      if (net > 0.01) {
+        if (!netBalances[debtor]) netBalances[debtor] = {};
+        netBalances[debtor][creditor] = net;
+      }
+    });
+  });
+
+  // Calculate my total Owe and Owed from the netted matrix
+  if (netBalances[currentUserId]) {
+    for (const amount of Object.values(netBalances[currentUserId])) {
+      iOwe += amount;
+    }
+  }
+
+  for (const debts of Object.values(netBalances)) {
+    if (debts[currentUserId]) {
+      iAmOwed += debts[currentUserId];
+    }
+  }
 
   return (
     <div className="space-y-6">
