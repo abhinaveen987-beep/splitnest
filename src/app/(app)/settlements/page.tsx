@@ -2,7 +2,7 @@ import { getSession } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 async function addSettlement(formData: FormData) {
@@ -31,6 +31,17 @@ async function addSettlement(formData: FormData) {
   revalidatePath('/balances');
   revalidatePath('/dashboard');
   redirect('/balances');
+}
+
+async function deleteSettlement(formData: FormData) {
+  'use server';
+  const id = formData.get('id') as string;
+  if (!id) return;
+
+  await supabase.from('settlements').delete().eq('id', id);
+  revalidatePath('/settlements');
+  revalidatePath('/balances');
+  revalidatePath('/dashboard');
 }
 
 export default async function SettlementsPage({ searchParams }: { searchParams: { payTo?: string, amount?: string } }) {
@@ -143,8 +154,20 @@ export default async function SettlementsPage({ searchParams }: { searchParams: 
                       </div>
                     </div>
                   </div>
-                  <div className={`font-bold ${isPayer ? 'text-danger' : 'text-success'}`}>
-                    {isPayer ? '-' : '+'}₹{parseFloat(s.amount).toFixed(2)}
+                  <div className="flex items-center gap-4">
+                    <div className={`font-bold ${isPayer ? 'text-danger' : 'text-success'}`}>
+                      {isPayer ? '-' : '+'}₹{parseFloat(s.amount).toFixed(2)}
+                    </div>
+                    <form action={deleteSettlement}>
+                      <input type="hidden" name="id" value={s.id} />
+                      <button 
+                        type="submit"
+                        className="text-gray-500 hover:text-danger transition-colors p-2 rounded-lg hover:bg-danger/10 flex items-center justify-center"
+                        title="Delete Settlement"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </form>
                   </div>
                 </div>
               );
