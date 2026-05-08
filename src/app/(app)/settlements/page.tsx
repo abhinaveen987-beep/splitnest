@@ -10,13 +10,17 @@ async function addSettlement(formData: FormData) {
   const session = await getSession();
   if (!session) return;
 
-  const receiverId = formData.get('receiverId') as string;
+  const selectedUserId = formData.get('selectedUserId') as string;
   const amount = parseFloat(formData.get('amount') as string);
+  const direction = formData.get('direction') as string;
   
-  if (!receiverId || isNaN(amount) || amount <= 0) return;
+  if (!selectedUserId || isNaN(amount) || amount <= 0 || !direction) return;
+
+  const payerId = direction === 'i_paid' ? session.user.id : selectedUserId;
+  const receiverId = direction === 'they_paid' ? session.user.id : selectedUserId;
 
   await supabase.from('settlements').insert({
-    payer_id: session.user.id,
+    payer_id: payerId,
     receiver_id: receiverId,
     amount: amount,
     status: 'COMPLETED',
@@ -65,9 +69,9 @@ export default async function SettlementsPage({ searchParams }: { searchParams: 
           </h2>
           <form action={addSettlement} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Pay To</label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Select Person</label>
               <select
-                name="receiverId"
+                name="selectedUserId"
                 defaultValue={prefillPayTo}
                 required
                 className="w-full bg-input border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
@@ -89,12 +93,24 @@ export default async function SettlementsPage({ searchParams }: { searchParams: 
                 placeholder="0.00"
               />
             </div>
-            <button
-              type="submit"
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-2 px-4 rounded-lg shadow-lg shadow-primary/20 transition-all mt-4"
-            >
-              Mark as Paid
-            </button>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <button
+                type="submit"
+                name="direction"
+                value="i_paid"
+                className="w-full bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-semibold py-2.5 px-4 rounded-lg transition-all"
+              >
+                I Paid Them
+              </button>
+              <button
+                type="submit"
+                name="direction"
+                value="they_paid"
+                className="w-full bg-success/20 hover:bg-success/30 text-success border border-success/30 font-semibold py-2.5 px-4 rounded-lg transition-all"
+              >
+                They Paid Me
+              </button>
+            </div>
           </form>
         </div>
 
